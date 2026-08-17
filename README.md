@@ -45,10 +45,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 4. Run the full extraction (~7 minutes)
+# 4. Ensure Gradle cache is warm (one-time, required for library mapping)
+# Run this in the ae repo if you haven't built it before:
+cd ~/repo/ae && ./gradlew testClasses
+# Then come back:
+cd ~/repo/AEKnowledgeGraph/knowledge-graph
+
+# 5. Run the full extraction (~7 minutes)
 python3 extract_all.py --repo-root ~/repo/ae --stats
 
-# 5. Query in browser
+# 6. Query in browser
 open http://localhost:7474
 # Login: neo4j / knowledge
 ```
@@ -327,16 +333,9 @@ pip install mcp-neo4j-cypher
 AEKnowledgeGraph/
 ├── README.md                        # This file
 ├── .gitignore
-├── ARCHITECTURE.md                  # Graph schema design decisions
-├── RELATIONSHIP_MATRIX.md           # Complete inventory of all extractable relationships
-├── IMPLEMENTATION_PLAN.md           # Original phased build plan
-├── EXTRACTION_STRATEGIES.md         # Per-language parsing details
-├── QUERY_PATTERNS.md                # Cypher cookbook for impact analysis
-├── FUTURE_SCOPE.md                  # Dynamic tracing, temporal analysis roadmap
-├── VALIDATION_TEST_PLAN.md          # How to prove ROI (or kill the project)
+├── ARCHITECTURE.md                  # Graph schema design decisions  
+├── FUTURE_SCOPE.md                  # Dynamic tracing, temporal analysis roadmap      
 ├── TEST_CASES.md                    # 24 real-world test scenarios with expected outputs
-├── GETTING_STARTED.md               # Step-by-step setup guide
-│
 └── knowledge-graph/                 # Implementation
     ├── docker-compose.yml           # Neo4j 5.26 + APOC
     ├── .env                         # Neo4j credentials (gitignored)
