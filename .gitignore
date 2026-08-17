@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+.env.local
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Neo4j (managed by Docker volumes, not committed)
+neo4j_data/
+neo4j_logs/
+
+# Generated data (large files generated at runtime)
+knowledge-graph/data/gradle-dependency-tree.txt
+
+# Package-to-library cache is intentionally committed (saves 90s on each run)
+# It auto-regenerates if the lockfile changes
+# knowledge-graph/data/package-to-library-cache.json  ← DO commit this
+
+# Node modules (if any tooling is added)
+node_modules/
+
+# Logs
+*.log
+
+# Secrets / credentials
+.env
+!knowledge-graph/.env.example
