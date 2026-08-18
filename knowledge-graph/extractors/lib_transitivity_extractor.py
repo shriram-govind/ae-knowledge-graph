@@ -61,6 +61,31 @@ class LibTransitivityExtractor(BaseExtractor):
         results = self.client.run_query("MATCH (lib:ExternalLibrary) RETURN lib.coordinate AS coord")
         known_libs = {r["coord"] for r in results}
 
+        # Find library coordinates in the tree that DON'T have nodes yet — create them
+        all_coords_in_tree = set()
+        for parent, child in lib_deps:
+            all_coords_in_tree.add(parent)
+            all_coords_in_tree.add(child)
+
+        missing_coords = all_coords_in_tree - known_libs
+        if missing_coords:
+            missing_nodes = []
+            for coord in missing_coords:
+                parts = coord.split(":", 1)
+                if len(parts) == 2:
+                    missing_nodes.append({
+                        "coordinate": coord,
+                        "group": parts[0],
+                        "artifact": parts[1],
+                        "latestVersion": "",
+                        "name": parts[1],
+                        "catalogAlias": "",
+                    })
+            if missing_nodes:
+                self.client.batch_create_nodes("ExternalLibrary", missing_nodes, merge_key="coordinate")
+                known_libs.update(coord for coord in missing_coords)
+                logger.info(f"  Created {len(missing_nodes)} additional ExternalLibrary nodes from dependency tree")
+
         # Create LIB_DEPENDS_ON edges
         edges = []
         for parent_coord, child_coord in lib_deps:

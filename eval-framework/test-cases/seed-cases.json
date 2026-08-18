@@ -1,0 +1,225 @@
+[
+  {
+    "id": "transitive-deps-001",
+    "scenario": "What modules in the ae repo are transitively affected by a vulnerability in com.google.android:annotations:4.1.1.4?",
+    "category": "transitive_deps",
+    "ground_truth": {
+      "expected_items": [
+        "epex",
+        "actor-executor",
+        "observability",
+        "ae",
+        "records-java",
+        "records-api",
+        "security",
+        "records-sync-java"
+      ],
+      "excluded_items": [
+        "admin-console",
+        "sail-intellij-plugin"
+      ],
+      "summary": "com.google.android:annotations is a transitive dependency via io.grpc:grpc-core. It affects 59+ modules including epex, actor-executor, observability, ae, all records-* modules, lcp-api-*, security, and test infrastructure. No code in ae directly imports this library.",
+      "verification_method": "Neo4j graph query: MATCH (m:Module)-[:DEPENDS_ON_LIB]->(lib)-[:LIB_DEPENDS_ON*1..3]->(dep {coordinate: 'com.google.android:annotations'}) RETURN m.name"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "List all modules that transitively depend on this library. Explain the dependency chain (what pulls it in).",
+    "tags": ["library-upgrade", "transitive", "grpc"]
+  },
+  {
+    "id": "transitive-deps-002",
+    "scenario": "What is the full transitive dependency chain from the epex module to com.google.android:annotations?",
+    "category": "transitive_deps",
+    "ground_truth": {
+      "expected_items": [
+        "io.grpc:grpc-core",
+        "io.grpc:grpc-netty-shaded",
+        "io.grpc:grpc-protobuf",
+        "io.grpc:grpc-stub"
+      ],
+      "excluded_items": [],
+      "summary": "epex depends on io.grpc:grpc-netty-shaded, grpc-protobuf, grpc-stub → these depend on io.grpc:grpc-core → which depends on com.google.android:annotations",
+      "verification_method": "Neo4j graph query tracing DEPENDS_ON_LIB and LIB_DEPENDS_ON relationships"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Trace the exact dependency chain from the epex module down to com.google.android:annotations. Show each intermediate library.",
+    "tags": ["library-upgrade", "transitive", "grpc", "epex"]
+  },
+  {
+    "id": "presence-check-001",
+    "scenario": "Is net.sf.trove4j:trove4j:3.0.3 used anywhere in the ae repository, either as a direct or transitive dependency?",
+    "category": "presence_check",
+    "ground_truth": {
+      "expected_items": [
+        "not present in ae repo",
+        "not in gradle dependency tree",
+        "not imported in any java file"
+      ],
+      "excluded_items": [
+        "algernon uses it",
+        "found in module X"
+      ],
+      "summary": "net.sf.trove4j:trove4j:3.0.3 is NOT present anywhere in the ae repository - not as a direct dependency, not as a transitive dependency, and not imported in any Java file. Note: org.jetbrains.intellij.deps:trove4j:1.0.20200330 (a different artifact) IS present via kotlin-compiler-embeddable in the detekt toolchain, but this is a different library.",
+      "verification_method": "Searched 1.1GB gradle-dependency-tree.txt (928 modules, all configurations) - zero occurrences. Grep across all .java files - zero imports. Lockfile check - not present."
+    },
+    "expected_graph_advantage": "none",
+    "instructions": "Determine definitively whether this library exists anywhere in the ae codebase. Check direct declarations, transitive dependencies, and Java imports.",
+    "tags": ["library-upgrade", "presence"]
+  },
+  {
+    "id": "blast-radius-001",
+    "scenario": "What is the blast radius of changing the RecordWriteServiceImpl class? What other classes depend on it directly or indirectly?",
+    "category": "blast_radius",
+    "ground_truth": {
+      "expected_items": [
+        "WriteRecordsVersion4",
+        "WriteRecordsVersion5",
+        "WriteRecordsVersion6",
+        "DeleteRecordsVersion6",
+        "RecordWriteService"
+      ],
+      "excluded_items": [],
+      "summary": "RecordWriteServiceImpl implements RecordWriteService and is used by WriteRecordsVersion4/5/6 and DeleteRecordsVersion6 for executing record writes including event records.",
+      "verification_method": "Knowledge graph IMPORTS/EXTENDS/IMPLEMENTS/INJECTS relationships from RecordWriteServiceImpl"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all classes that directly import, extend, implement, or inject RecordWriteServiceImpl. Also find classes that depend on those (second-order impact).",
+    "tags": ["blast-radius", "records", "write"]
+  },
+  {
+    "id": "blast-radius-002",
+    "scenario": "If I modify the QueryRecordTypeFunctionExecutorImpl class, what SAIL rules and Java classes are affected?",
+    "category": "blast_radius",
+    "ground_truth": {
+      "expected_items": [
+        "queryRecordType",
+        "queryRecordType_internal"
+      ],
+      "excluded_items": [],
+      "summary": "QueryRecordTypeFunctionExecutorImpl is the main executor for a!queryRecordType(). SAIL rules that call this built-in function are affected, as well as Java classes that import or inject it.",
+      "verification_method": "Graph: CALLS_BUILTIN relationships pointing to this class, plus IMPORTS/INJECTS relationships"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all SAIL rules that call this class as a built-in function, and all Java classes that import or inject it.",
+    "tags": ["blast-radius", "records", "query", "cross-language"]
+  },
+  {
+    "id": "ownership-001",
+    "scenario": "What team owns the records-java module?",
+    "category": "ownership",
+    "ground_truth": {
+      "expected_items": [
+        "squad-data-fabric"
+      ],
+      "excluded_items": [],
+      "summary": "The records-java module is owned by squad-data-fabric per CODEOWNERS.",
+      "verification_method": "Knowledge graph: MATCH (t:Team)-[:OWNS]->(m:Module {name: 'records-java'}) RETURN t.name"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Determine which team owns this module according to CODEOWNERS.",
+    "tags": ["ownership", "records"]
+  },
+  {
+    "id": "ownership-002",
+    "scenario": "What team owns the epex module and what other modules do they own?",
+    "category": "ownership",
+    "ground_truth": {
+      "expected_items": [
+        "epex",
+        "epex-driver",
+        "actor-executor"
+      ],
+      "excluded_items": [],
+      "summary": "The epex module is owned by the Autoscale/Process Orchestration team. They also own epex-driver and actor-executor.",
+      "verification_method": "Knowledge graph: MATCH (t:Team)-[:OWNS]->(m:Module) WHERE m.name CONTAINS 'epex' RETURN t, m"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find the team that owns the epex module, then list all other modules they own.",
+    "tags": ["ownership", "epex", "autoscale"]
+  },
+  {
+    "id": "feature-toggle-001",
+    "scenario": "What code is gated by the feature toggle ae.records-powered-ui.record-documents?",
+    "category": "feature_toggle",
+    "ground_truth": {
+      "expected_items": [
+        "RecordDocumentsService",
+        "rtd_recordDocuments_main",
+        "isRecordDocumentsFeatureEnabled"
+      ],
+      "excluded_items": [],
+      "summary": "The ae.records-powered-ui.record-documents toggle gates the record documents feature including the RecordDocumentsService, RTD documents tab SAIL rules, and related validation.",
+      "verification_method": "Knowledge graph: MATCH (t:FeatureToggle {name: 'ae.records-powered-ui.record-documents'})-[:GATES]->(code) RETURN code"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all Java classes and SAIL rules that are gated by this feature toggle.",
+    "tags": ["feature-toggle", "record-documents"]
+  },
+  {
+    "id": "cross-language-001",
+    "scenario": "What Java built-in function does the SAIL rule a!recordTypeProperties call, and what class implements it?",
+    "category": "cross_language",
+    "ground_truth": {
+      "expected_items": [
+        "RecordTypeProperties",
+        "recordTypeProperties"
+      ],
+      "excluded_items": [],
+      "summary": "The SAIL function a!recordTypeProperties is implemented by the Java class RecordTypeProperties (registered as Id(Domain.SYS, 'recordTypeProperties')).",
+      "verification_method": "Knowledge graph: MATCH (s:SailRule)-[r:CALLS_BUILTIN]->(j:JavaClass) WHERE r.functionName = 'recordTypeProperties' RETURN j"
+    },
+    "expected_graph_advantage": "moderate",
+    "instructions": "Trace from the SAIL function to its Java implementation. Identify the implementing class and its location.",
+    "tags": ["cross-language", "sail-to-java", "records"]
+  },
+  {
+    "id": "test-coverage-001",
+    "scenario": "What expression tests cover the SAIL rule rtd_recordEvents?",
+    "category": "test_coverage",
+    "ground_truth": {
+      "expected_items": [
+        "rtd_recordEvents"
+      ],
+      "excluded_items": [],
+      "summary": "Expression tests that have TESTS_RULE relationship to the rtd_recordEvents SAIL rule.",
+      "verification_method": "Knowledge graph: MATCH (t:ExpressionTest)-[:TESTS_RULE]->(r:SailRule {name: 'rtd_recordEvents'}) RETURN t.path"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all expression test files that test the rtd_recordEvents SAIL rule.",
+    "tags": ["test-coverage", "records", "events"]
+  },
+  {
+    "id": "dependency-chain-001",
+    "scenario": "What modules does the records-sync-java module depend on?",
+    "category": "dependency_chain",
+    "ground_truth": {
+      "expected_items": [
+        "records-api",
+        "records-sync-api"
+      ],
+      "excluded_items": [],
+      "summary": "records-sync-java depends on records-api and records-sync-api as direct module dependencies.",
+      "verification_method": "Knowledge graph: MATCH (m:Module {name: 'records-sync-java'})-[:DEPENDS_ON]->(dep:Module) RETURN dep.name"
+    },
+    "expected_graph_advantage": "moderate",
+    "instructions": "List all direct module (project) dependencies of records-sync-java. Do not include external library dependencies.",
+    "tags": ["dependency-chain", "records", "sync"]
+  },
+  {
+    "id": "presence-check-002",
+    "scenario": "Is org.freehep:vectorgraphics:2.0 used anywhere in the ae repository?",
+    "category": "presence_check",
+    "ground_truth": {
+      "expected_items": [
+        "not present in ae repo"
+      ],
+      "excluded_items": [
+        "found in module X"
+      ],
+      "summary": "org.freehep:vectorgraphics:2.0 is NOT present anywhere in the ae repository. Not in Gradle files, not in the lockfile, not in the dependency tree, and not imported in any Java file.",
+      "verification_method": "grep across all files, lockfile check, 1.1GB dependency tree search - zero occurrences"
+    },
+    "expected_graph_advantage": "none",
+    "instructions": "Determine definitively whether this library exists anywhere in the ae codebase.",
+    "tags": ["library-upgrade", "presence"]
+  }
+]

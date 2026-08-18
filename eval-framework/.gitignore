@@ -1,0 +1,6 @@
+# Generated during evaluation runs
+results/
+recorded-results/
+sessions/
+__pycache__/
+*.pyc

@@ -1,0 +1,432 @@
+[
+  {
+    "id": "impact-1.1-sync-service",
+    "scenario": "I'm about to change the retry logic in ImmediateSyncServiceImpl. What other files will I need to check for breakage?",
+    "category": "blast_radius",
+    "ground_truth": {
+      "expected_items": [
+        "RecordWriteServiceImpl",
+        "ReplicaUpdateTransactionProcess"
+      ],
+      "excluded_items": [],
+      "summary": "A change to ImmediateSyncServiceImpl affects RecordWriteServiceImpl (imports ImmediateSyncService), ReplicaUpdateTransactionProcess (uses sync service), Spring config classes that wire it, and classes in the records-sync-java module.",
+      "verification_method": "Neo4j: MATCH (target:JavaClass {name: 'ImmediateSyncServiceImpl'})<-[:IMPORTS|EXTENDS|IMPLEMENTS|INJECTS*1..2]-(affected) WHERE affected.isTest = false RETURN affected"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all classes that directly import, extend, implement, or inject ImmediateSyncServiceImpl. Include second-order impact (classes that depend on the direct dependents).",
+    "tags": ["impact-analysis", "records", "sync"]
+  },
+  {
+    "id": "impact-1.2-sail-rule",
+    "scenario": "I need to add a new required input to rtd_recordEvents_configuredState. What rules call it that would break?",
+    "category": "blast_radius",
+    "ground_truth": {
+      "expected_items": [
+        "rtd_recordEvents"
+      ],
+      "excluded_items": [],
+      "summary": "Adding a required param to rtd_recordEvents_configuredState breaks all its callers. The direct caller is rtd_recordEvents, plus any rules that transitively call through it.",
+      "verification_method": "Neo4j: MATCH (target:SailRule {name: 'rtd_recordEvents_configuredState'})<-[:CALLS*1..3]-(caller) RETURN caller.name"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all SAIL rules that call rtd_recordEvents_configuredState directly or transitively (up to 3 levels).",
+    "tags": ["impact-analysis", "sail", "record-events"]
+  },
+  {
+    "id": "impact-1.3-db-table",
+    "scenario": "I'm adding a new column to the record_type table. What entities and Java code would be affected? What about child tables with FK relationships?",
+    "category": "blast_radius",
+    "ground_truth": {
+      "expected_items": [
+        "RecordTypeDefinition",
+        "record_type"
+      ],
+      "excluded_items": [],
+      "summary": "The record_type table maps to the RecordTypeDefinition entity. Child tables linked via FK include action configs, view configs, etc. Consumer classes include DAOs, services, and converters.",
+      "verification_method": "Neo4j: MATCH (table:Table {name: 'record_type'}) with FK_TO and MAPS_TO relationships"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find the JPA entity mapped to the record_type table, all child tables with FK relationships to it, and Java classes that consume the entity.",
+    "tags": ["impact-analysis", "database", "records"]
+  },
+  {
+    "id": "impact-1.4-spring-config",
+    "scenario": "I'm adding a new bean to RecordQuerySpringConfig. What other configs import this one? What does it already produce?",
+    "category": "blast_radius",
+    "ground_truth": {
+      "expected_items": [
+        "RecordQuerySpringConfig"
+      ],
+      "excluded_items": [],
+      "summary": "Shows what the config already imports via @Import, what beans it produces via @Bean methods, and what other Spring configs depend on it.",
+      "verification_method": "Neo4j: MATCH (config:JavaClass {name: 'RecordQuerySpringConfig'}) with SPRING_IMPORTS and PRODUCES relationships"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find what Spring configs import RecordQuerySpringConfig, what beans it produces, and what it imports itself.",
+    "tags": ["impact-analysis", "spring", "records"]
+  },
+  {
+    "id": "lib-upgrade-2.1-jackson",
+    "scenario": "Security flagged a CVE in jackson-databind. How many modules and classes use it? What other libraries depend on it that might also break?",
+    "category": "transitive_deps",
+    "ground_truth": {
+      "expected_items": [
+        "com.fasterxml.jackson.core:jackson-databind"
+      ],
+      "excluded_items": [],
+      "summary": "jackson-databind is used by 60+ modules, 200+ classes, and multiple other libraries depend on it (jackson-datatype, jackson-jaxrs, etc.).",
+      "verification_method": "Neo4j: MATCH (lib:ExternalLibrary {coordinate: 'com.fasterxml.jackson.core:jackson-databind'}) with USES_LIBRARY and LIB_DEPENDS_ON relationships"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find the total number of modules and classes using jackson-databind, and all other libraries that transitively depend on it.",
+    "tags": ["library-upgrade", "security", "jackson"]
+  },
+  {
+    "id": "lib-upgrade-2.2-react",
+    "scenario": "We need to upgrade React. Which modules use it and what version is each on?",
+    "category": "transitive_deps",
+    "ground_truth": {
+      "expected_items": [
+        "sail-client",
+        "email-renderer"
+      ],
+      "excluded_items": [],
+      "summary": "React is used by sail-client (React 17), sail-client-native (React 19), email-renderer (React 16), and appian-desktop-application (React 19).",
+      "verification_method": "Neo4j: MATCH (react:NpmPackage {name: 'react'})<-[:NPM_DEPENDS_ON]-(workspace) WHERE workspace.isWorkspace = true RETURN workspace"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "List all workspace packages (modules) that depend on React, and what version each uses.",
+    "tags": ["library-upgrade", "frontend", "react"]
+  },
+  {
+    "id": "lib-upgrade-2.3-react-ecosystem",
+    "scenario": "List all react-* libraries in the codebase with their versions and which package uses them. I need to know which ones will break with React 19.",
+    "category": "transitive_deps",
+    "ground_truth": {
+      "expected_items": [
+        "react-redux",
+        "react-dnd"
+      ],
+      "excluded_items": [],
+      "summary": "All react-* ecosystem libraries with their versions and consuming workspace packages.",
+      "verification_method": "Neo4j: MATCH (pkg:NpmPackage) WHERE pkg.name STARTS WITH 'react-' with NPM_DEPENDS_ON from workspaces"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "List all npm packages starting with 'react-' that are used in workspace packages, with version info.",
+    "tags": ["library-upgrade", "frontend", "react"]
+  },
+  {
+    "id": "cross-lang-3.1-sail-to-java",
+    "scenario": "What Java class implements the a!queryRecordType function? I need to look at its source.",
+    "category": "cross_language",
+    "ground_truth": {
+      "expected_items": [
+        "QueryRecordTypeFunctionExecutorImpl",
+        "queryRecordType"
+      ],
+      "excluded_items": [],
+      "summary": "The SAIL function a!queryRecordType is backed by Java classes with FN_ID registration for 'queryRecordType'.",
+      "verification_method": "Neo4j: MATCH (s:SailRule)-[r:CALLS_BUILTIN]->(j:JavaClass) WHERE r.functionName = 'queryRecordType' RETURN j"
+    },
+    "expected_graph_advantage": "moderate",
+    "instructions": "Find the Java class that implements the a!queryRecordType built-in function.",
+    "tags": ["cross-language", "sail-to-java", "records"]
+  },
+  {
+    "id": "cross-lang-3.2-reaction",
+    "scenario": "I see a!externalReaction('record.replica.security.refresh') in a SAIL rule. What Java class handles this reaction and which SAIL rule triggers it?",
+    "category": "cross_language",
+    "ground_truth": {
+      "expected_items": [
+        "rtd_rls_refreshSecurityPolicy",
+        "RefreshSecurityPolicyReaction"
+      ],
+      "excluded_items": [],
+      "summary": "The reaction 'record.replica.security.refresh' is triggered by SAIL rule rtd_rls_refreshSecurityPolicy and handled by Java class RefreshSecurityPolicyReaction.",
+      "verification_method": "Neo4j: MATCH (s:SailRule)-[r:CALLS_REACTION]->(j:JavaClass) WHERE r.reactionKey = 'record.replica.security.refresh' RETURN s, j"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find both the SAIL rule that triggers this reaction and the Java class that handles it.",
+    "tags": ["cross-language", "reaction", "records", "security"]
+  },
+  {
+    "id": "cross-lang-3.3-e2e-trace",
+    "scenario": "Trace the full path from the writeRecords SAIL rule down to the database tables it touches. I want to understand the entire write path.",
+    "category": "cross_language",
+    "ground_truth": {
+      "expected_items": [
+        "writeRecords",
+        "RecordWriteServiceImpl"
+      ],
+      "excluded_items": [],
+      "summary": "Chain: SAIL writeRecords → Java Write function → WriteServiceImpl → Entity → database table.",
+      "verification_method": "Neo4j: Multi-hop query from SailRule through CALLS_BUILTIN → IMPORTS → Entity → MAPS_TO → Table"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Trace from the writeRecords SAIL rule through Java built-in functions, service classes, entities, and down to database tables.",
+    "tags": ["cross-language", "e2e-trace", "records", "write"]
+  },
+  {
+    "id": "toggle-4.1-scope",
+    "scenario": "We're about to enable the ae.records-powered-ui.record-documents toggle in production. What code will activate? I need a full list of affected classes and rules.",
+    "category": "feature_toggle",
+    "ground_truth": {
+      "expected_items": [
+        "RecordDocumentsService",
+        "rtd_recordDocuments_main",
+        "isRecordDocumentsFeatureEnabled"
+      ],
+      "excluded_items": [],
+      "summary": "The toggle gates the record documents feature including RecordDocumentsService, RTD documents tab SAIL rules, and related validation.",
+      "verification_method": "Neo4j: MATCH (t:FeatureToggle {name: 'ae.records-powered-ui.record-documents'})-[:GATES]->(code) RETURN code"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all Java classes and SAIL rules gated by the ae.records-powered-ui.record-documents feature toggle.",
+    "tags": ["feature-toggle", "record-documents", "production-risk"]
+  },
+  {
+    "id": "toggle-4.2-most-impactful",
+    "scenario": "Which feature toggles gate the most code? I want to understand which ones are riskiest to flip.",
+    "category": "feature_toggle",
+    "ground_truth": {
+      "expected_items": [],
+      "excluded_items": [],
+      "summary": "Top 10 feature toggles ranked by number of code units (Java classes + SAIL rules) they gate.",
+      "verification_method": "Neo4j: MATCH (t:FeatureToggle)-[:GATES]->(code) WITH t, count(code) AS gatedCount ORDER BY gatedCount DESC LIMIT 10 RETURN t.name, gatedCount"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Rank feature toggles by the amount of code they gate. Return the top 10 with their gated code count.",
+    "tags": ["feature-toggle", "risk-assessment"]
+  },
+  {
+    "id": "ownership-5.1-class",
+    "scenario": "I found a bug in RecordWriteServiceImpl. Which team should I assign the Jira ticket to?",
+    "category": "ownership",
+    "ground_truth": {
+      "expected_items": [
+        "RecordWriteServiceImpl",
+        "records-java"
+      ],
+      "excluded_items": [],
+      "summary": "RecordWriteServiceImpl is in the records-java module, which is owned by the data-fabric team.",
+      "verification_method": "Neo4j: MATCH (c:JavaClass {name: 'RecordWriteServiceImpl'})<-[:CONTAINS*]-(m:Module)<-[:OWNS]-(t:Team) RETURN t.name"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find the team that owns the module containing RecordWriteServiceImpl.",
+    "tags": ["ownership", "records", "triage"]
+  },
+  {
+    "id": "ownership-5.2-team-scope",
+    "scenario": "What modules does the data-fabric team own? I need to understand their scope.",
+    "category": "ownership",
+    "ground_truth": {
+      "expected_items": [
+        "records-java",
+        "records-api"
+      ],
+      "excluded_items": [],
+      "summary": "All modules owned by the data-fabric team per CODEOWNERS.",
+      "verification_method": "Neo4j: MATCH (t:Team)-[:OWNS]->(m:Module) WHERE t.name CONTAINS 'data-fabric' RETURN m.name"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "List all modules owned by the data-fabric team.",
+    "tags": ["ownership", "data-fabric"]
+  },
+  {
+    "id": "test-coverage-6.1-sail-rule",
+    "scenario": "I changed rtd_recordEvents_configuredState. What expression tests should I run to make sure it still works?",
+    "category": "test_coverage",
+    "ground_truth": {
+      "expected_items": [
+        "rtd_recordEvents_configuredState"
+      ],
+      "excluded_items": [],
+      "summary": "Expression test files (unit and integration) that test the rtd_recordEvents_configuredState SAIL rule.",
+      "verification_method": "Neo4j: MATCH (t:ExpressionTest)-[:TESTS_RULE]->(r:SailRule {name: 'rtd_recordEvents_configuredState'}) RETURN t.path"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all expression test files that cover the rtd_recordEvents_configuredState SAIL rule.",
+    "tags": ["test-coverage", "sail", "record-events"]
+  },
+  {
+    "id": "test-coverage-6.2-groovy",
+    "scenario": "I'm refactoring FullDependencyCalculator. Are there any Spock tests I need to update?",
+    "category": "test_coverage",
+    "ground_truth": {
+      "expected_items": [
+        "FullDependencyCalculator"
+      ],
+      "excluded_items": [],
+      "summary": "Groovy/Spock test files that import or target FullDependencyCalculator.",
+      "verification_method": "Neo4j: MATCH (t:GroovyTest)-[:TESTS_CLASS]->(c:JavaClass {name: 'FullDependencyCalculator'}) RETURN t.path"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all Groovy/Spock test files that test the FullDependencyCalculator class.",
+    "tags": ["test-coverage", "groovy", "spock"]
+  },
+  {
+    "id": "test-coverage-6.3-untested-rules",
+    "scenario": "Find me the biggest SAIL rules that have zero test coverage. These are our highest-risk areas.",
+    "category": "test_coverage",
+    "ground_truth": {
+      "expected_items": [],
+      "excluded_items": [],
+      "summary": "Large untested SAIL rules (by line count) with no expression tests covering them — potential risk areas.",
+      "verification_method": "Neo4j: MATCH (r:SailRule) WHERE NOT exists { (:ExpressionTest)-[:TESTS_RULE]->(r) } ORDER BY r.definitionLineCount DESC LIMIT 20"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find the 20 largest SAIL rules (by definition line count) that have no expression test coverage.",
+    "tags": ["test-coverage", "risk", "dead-code"]
+  },
+  {
+    "id": "spring-di-7.1-injections",
+    "scenario": "Show me all the dependencies that get injected into RecordEventsGenerationManagerImpl. I want to understand its coupling.",
+    "category": "dependency_chain",
+    "ground_truth": {
+      "expected_items": [
+        "RecordEventsGenerationManagerImpl"
+      ],
+      "excluded_items": [],
+      "summary": "All injected dependencies of RecordEventsGenerationManagerImpl with injection type (field/constructor/bean_method_param).",
+      "verification_method": "Neo4j: MATCH (c:JavaClass {name: 'RecordEventsGenerationManagerImpl'})-[r:INJECTS]->(dep) RETURN dep.name, r.injectionType"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all Spring-injected dependencies of RecordEventsGenerationManagerImpl, including injection type.",
+    "tags": ["spring-di", "coupling", "record-events"]
+  },
+  {
+    "id": "spring-di-7.2-multiple-impls",
+    "scenario": "Which interfaces in the codebase have multiple implementations? I want to understand where DI ambiguity could cause issues.",
+    "category": "dependency_chain",
+    "ground_truth": {
+      "expected_items": [],
+      "excluded_items": [],
+      "summary": "Interfaces with more than one non-test implementation — potential DI ambiguity without @Primary or @Qualifier.",
+      "verification_method": "Neo4j: MATCH (impl:JavaClass)-[:IMPLEMENTS]->(iface:JavaClass {kind: 'interface'}) WHERE iface.isTest = false WITH iface, count(impl) WHERE count > 1"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find interfaces with more than one implementation class (excluding test classes). List the interface and all its implementations.",
+    "tags": ["spring-di", "architecture", "ambiguity"]
+  },
+  {
+    "id": "cdt-8.1-paging-info",
+    "scenario": "I'm changing the PagingInfo CDT. What SAIL rules reference it that I'd need to check?",
+    "category": "blast_radius",
+    "ground_truth": {
+      "expected_items": [
+        "PagingInfo"
+      ],
+      "excluded_items": [],
+      "summary": "SAIL rules that instantiate or reference the PagingInfo CDT.",
+      "verification_method": "Neo4j: MATCH (r:SailRule)-[:REFERENCES_CDT]->(cdt:CdtType {name: 'PagingInfo'}) RETURN r.name"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find all SAIL rules that reference the PagingInfo CDT type.",
+    "tags": ["cdt", "blast-radius", "type-system"]
+  },
+  {
+    "id": "cdt-8.2-most-used",
+    "scenario": "What are the most commonly used CDTs in our SAIL code? I want to understand the core data structures.",
+    "category": "dependency_chain",
+    "ground_truth": {
+      "expected_items": [],
+      "excluded_items": [],
+      "summary": "Top CDTs by SAIL rule usage count (likely includes Map, PagingInfo, SortInfo, etc.).",
+      "verification_method": "Neo4j: MATCH (cdt:CdtType)<-[:REFERENCES_CDT]-(r:SailRule) WITH cdt, count(r) AS usageCount ORDER BY usageCount DESC LIMIT 15"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Rank CDTs by how many SAIL rules reference them. Return top 15.",
+    "tags": ["cdt", "type-system", "architecture"]
+  },
+  {
+    "id": "arch-9.1-circular-deps",
+    "scenario": "Are there any circular dependencies between modules? Find modules that depend on each other bidirectionally.",
+    "category": "dependency_chain",
+    "ground_truth": {
+      "expected_items": [],
+      "excluded_items": [],
+      "summary": "Module pairs with bidirectional DEPENDS_ON relationships — architecture smell.",
+      "verification_method": "Neo4j: MATCH (a:Module)-[:DEPENDS_ON]->(b:Module)-[:DEPENDS_ON]->(a) WHERE a.name < b.name RETURN a.name, b.name"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find module pairs that depend on each other bidirectionally (circular dependencies).",
+    "tags": ["architecture", "circular-deps", "code-smell"]
+  },
+  {
+    "id": "arch-9.2-most-coupled",
+    "scenario": "Which modules have the most outgoing dependencies? These are our most coupled modules that are hardest to change independently.",
+    "category": "dependency_chain",
+    "ground_truth": {
+      "expected_items": [
+        "ae"
+      ],
+      "excluded_items": [],
+      "summary": "Modules ranked by outgoing dependency count. ae, records-java, and test likely have the most.",
+      "verification_method": "Neo4j: MATCH (m:Module)-[:DEPENDS_ON]->(dep:Module) WITH m, count(dep) AS depCount ORDER BY depCount DESC LIMIT 10"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find the top 10 most coupled modules (highest number of outgoing module dependencies).",
+    "tags": ["architecture", "coupling", "risk"]
+  },
+  {
+    "id": "arch-9.3-most-critical",
+    "scenario": "What are the most critical modules — the ones with the most things depending on them? Changes to these need extra care.",
+    "category": "dependency_chain",
+    "ground_truth": {
+      "expected_items": [
+        "ae",
+        "expression-evaluator"
+      ],
+      "excluded_items": [],
+      "summary": "Modules ranked by incoming dependency count. ae (300+), expression-evaluator (290+), asl (198+) are the most critical.",
+      "verification_method": "Neo4j: MATCH (m:Module)<-[:DEPENDS_ON]-(dependent:Module) WITH m, count(dependent) AS dependentCount ORDER BY dependentCount DESC LIMIT 10"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find the top 10 most critical modules (highest number of modules depending on them).",
+    "tags": ["architecture", "critical-path", "risk"]
+  },
+  {
+    "id": "infra-10.1-docker-deps",
+    "scenario": "Show me the Docker service dependency graph. What depends on what in our docker-compose setup?",
+    "category": "dependency_chain",
+    "ground_truth": {
+      "expected_items": [
+        "webapp"
+      ],
+      "excluded_items": [],
+      "summary": "Docker service dependency graph showing which services depend on which others.",
+      "verification_method": "Neo4j: MATCH (s:DockerService)-[:SERVICE_DEPENDS_ON]->(dep:DockerService) RETURN s.name, dep.name"
+    },
+    "expected_graph_advantage": "moderate",
+    "instructions": "Map out the Docker service dependency graph from docker-compose files.",
+    "tags": ["infrastructure", "docker", "dependencies"]
+  },
+  {
+    "id": "dead-code-11.1-unreferenced-classes",
+    "scenario": "Find Java classes that nothing imports, extends, implements, or injects. These might be dead code we can clean up.",
+    "category": "blast_radius",
+    "ground_truth": {
+      "expected_items": [],
+      "excluded_items": [],
+      "summary": "Classes with no incoming references (IMPORTS, EXTENDS, IMPLEMENTS, INJECTS, CALLS_BUILTIN) — candidates for dead code review.",
+      "verification_method": "Neo4j: MATCH (c:JavaClass) WHERE NOT exists incoming relationships and c.isTest = false"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find non-test Java classes that have zero incoming references of any kind. These are dead code candidates.",
+    "tags": ["dead-code", "cleanup", "architecture"]
+  },
+  {
+    "id": "dead-code-11.2-orphaned-sail",
+    "scenario": "Find internal SAIL rules that are never called by anything else. These are orphaned rules we might be able to delete.",
+    "category": "blast_radius",
+    "ground_truth": {
+      "expected_items": [],
+      "excluded_items": [],
+      "summary": "Internal (systemOnly) SAIL rules with substantial code (>10 lines) that are never called — potential dead code.",
+      "verification_method": "Neo4j: MATCH (r:SailRule) WHERE r.isSystemOnly = true AND NOT ()-[:CALLS]->(r) AND r.definitionLineCount > 10"
+    },
+    "expected_graph_advantage": "strong",
+    "instructions": "Find systemOnly SAIL rules with >10 lines of code that are never called by any other rule or function.",
+    "tags": ["dead-code", "sail", "cleanup"]
+  }
+]
