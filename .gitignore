@@ -36,6 +36,7 @@ neo4j_logs/
 
 # Generated data (large files generated at runtime)
 knowledge-graph/data/gradle-dependency-tree.txt
+knowledge-graph/data/backups
 
 # Package-to-library cache is intentionally committed (saves 90s on each run)
 # It auto-regenerates if the lockfile changes

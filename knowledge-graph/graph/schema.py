@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 CONSTRAINTS = [
     ("Module", "gradlePath"),
     ("JavaClass", "fqn"),
+    ("Method", "id"),
     ("SailRule", "uuid"),
     ("Table", "name"),
     ("FeatureToggle", "name"),
@@ -25,6 +26,9 @@ INDEXES = [
     ("Module", "name"),
     ("JavaClass", "name"),
     ("JavaClass", "path"),
+    ("JavaClass", "kind"),
+    ("Method", "name"),
+    ("Method", "ownerFqn"),
     ("SailRule", "name"),
     ("SailRule", "path"),
     ("TsFile", "path"),

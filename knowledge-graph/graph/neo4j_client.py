@@ -78,7 +78,7 @@ class GraphClient:
             # Delete in batches to handle large graphs
             while True:
                 result = session.run(
-                    "MATCH (n) WITH n LIMIT 10000 DETACH DELETE n RETURN count(*) AS deleted"
+                    "MATCH (n) WITH n LIMIT 5000 DETACH DELETE n RETURN count(*) AS deleted"
                 )
                 deleted = result.single()["deleted"]
                 if deleted == 0:
